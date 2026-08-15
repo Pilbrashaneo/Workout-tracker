@@ -6,7 +6,6 @@
   "display": "standalone",
   "background_color": "#0d1117",
   "theme_color": "#0d1117",
-  "description": "Offline three-day strength workout tracker",
   "icons": [
     {
       "src": "icon-192.png",

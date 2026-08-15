@@ -3,12 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#0d1117" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Strength Tracker" />
-<link rel="manifest" href="manifest.webmanifest" />
-<link rel="apple-touch-icon" href="icon-192.png" />
+<meta name="theme-color" content="#0d1117"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Strength Tracker"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-192.png">
 <title>3-Day Strength Tracker</title>
 <style>
 :root{
@@ -24,7 +19,8 @@ h1{font-size:24px;margin:5px 0 4px}
 .timerRow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .timerBox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}
 .timerBox .label{font-size:11px;text-transform:uppercase;color:var(--muted);letter-spacing:.7px}
-.timerBox .time{font-size:28px;font-weight:800;font-variant-numeric:tabular-nums}
+.timerBox .time{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+#restTime{font-size:48px;line-height:1;font-weight:900}
 .controls{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 button, select, input{font:inherit}
 button{border:0;border-radius:10px;padding:10px 13px;font-weight:700;cursor:pointer}
@@ -155,7 +151,7 @@ button{border:0;border-radius:10px;padding:10px 13px;font-weight:700;cursor:poin
 
     <div class="chartCard">
       <div class="chartTitle" id="chartTitle">Progress</div>
-      <div class="chartSub">Average completed-set weight by workout</div>
+      <div class="chartSub">Total exercise volume per workout (weight × reps)</div>
       <div class="metricRow">
         <div class="metric"><div class="mLabel">Latest</div><div class="mValue" id="latestMetric">—</div></div>
         <div class="metric"><div class="mLabel">Best</div><div class="mValue" id="bestMetric">—</div></div>
@@ -164,21 +160,7 @@ button{border:0;border-radius:10px;padding:10px 13px;font-weight:700;cursor:poin
       <canvas id="progressChart" width="680" height="250"></canvas>
     </div>
 
-    <div class="historyCard">
-      <div class="chartTitle">Backup & restore</div>
-      <div class="chartSub">Export all workout data to a file, or restore it later on this or another device.</div>
-      <div class="controls">
-        <button class="secondary" onclick="exportBackup()">Export Backup</button>
-        <button class="secondary" onclick="document.getElementById('restoreFile').click()">Restore Backup</button>
-        <input id="restoreFile" type="file" accept="application/json,.json" style="display:none" onchange="restoreBackup(event)">
-      </div>
-      <div class="note">On iPhone, save occasional backups to the Files app or iCloud Drive.</div>
-    </div>
-
-    <div class="historyCard">
-      <div class="chartTitle">Install on iPhone</div>
-      <div class="chartSub">Open the hosted app in Safari, tap Share → Add to Home Screen. Open it once while online; after that it can work offline.</div>
-    </div>
+    <div class="historyCard"><div class="chartTitle">Backup & restore</div><div class="chartSub">Save all workout data to a file or restore it later.</div><div class="controls"><button class="secondary" onclick="exportBackup()">Export Backup</button><button class="secondary" onclick="document.getElementById('restoreFile').click()">Restore Backup</button><input id="restoreFile" type="file" accept="application/json,.json" style="display:none" onchange="restoreBackup(event)"></div><div class="note">Save occasional backups to Files / iCloud Drive.</div></div>
 
     <div class="historyCard">
       <div class="chartTitle">Full history</div>
@@ -196,412 +178,46 @@ button{border:0;border-radius:10px;padding:10px 13px;font-weight:700;cursor:poin
 </div>
 
 <script>
-const workouts = {
-  push: {
-    title: "Day 1 – Push / Quads",
-    exercises: [
-      {gym:"Incline Bench Press", home:"Incline DB Bench Press"},
-      {gym:"Deep Goblet Squat", home:"KB / DB Goblet Squat"},
-      {gym:"Shoulder Press", home:"Seated DB Shoulder Press"},
-      {gym:"Tricep Pulldown", home:"DB Skull Crushers on Bench"},
-      {gym:"Assisted Dip Machine", home:"Close-Grip DB Bench Press"}
-    ]
-  },
-  pull: {
-    title: "Day 2 – Pull / Posterior",
-    exercises: [
-      {gym:"Lat Pulldown", home:"DB / KB Pullover"},
-      {gym:"Seated Cable Row", home:"1-Arm DB / KB Row"},
-      {gym:"Standing Bicep Curl", home:"DB / KB Bicep Curl"},
-      {gym:"Lying Leg Curl", home:"Single-Leg DB Romanian Deadlift"},
-      {gym:"Assisted Pull-Ups", home:"DB / KB Pullover"}
-    ]
-  },
-  full: {
-    title: "Day 3 – Full Body",
-    exercises: [
-      {gym:"Flat DB Bench Press", home:"Flat DB Bench Press"},
-      {gym:"Leg Press", home:"10 Goblet Squats + 15 KB Swings"},
-      {gym:"Chest-Supported Row", home:"Incline Bench DB Row"},
-      {gym:"DB / KB Lateral Raise", home:"DB / KB Lateral Raise", range:"10–15"},
-      {gym:"Overhead Tricep Extension", home:"DB / KB Overhead Tricep Extension", range:"10–12"}
-    ]
-  }
-};
-
-let currentDay = localStorage.getItem("currentDay") || "push";
-let mode = localStorage.getItem("mode") || "gym";
-let currentPage = "workout";
-let workoutRunning=false, workoutSeconds=0, workoutInt=null;
-let restSeconds=90, restInt=null;
-
-function key(exIndex){ return `tracker_${currentDay}_${mode}_${exIndex}`; }
-function histKey(exIndex){ return `history_${currentDay}_${mode}_${exIndex}`; }
-function getData(exIndex){
-  let d=JSON.parse(localStorage.getItem(key(exIndex)) || '{"weight":"","flag":false,"sets":[{"reps":10,"done":false},{"reps":10,"done":false},{"reps":10,"done":false},{"reps":10,"done":false}]}');
-  // Upgrade older saved data so every set has its own weight.
-  if(!d.sets) d.sets=[];
-  while(d.sets.length<4) d.sets.push({reps:10,done:false});
-  d.sets=d.sets.slice(0,4).map(s=>({
-    reps:(s.reps ?? 10),
-    weight:(s.weight ?? d.weight ?? ""),
-    done:!!s.done
-  }));
-  return d;
-}
-function saveData(exIndex,d){ localStorage.setItem(key(exIndex),JSON.stringify(d)); }
-function getHistory(exIndex){
-  return JSON.parse(localStorage.getItem(histKey(exIndex)) || '[]');
-}
-function addHistory(exIndex,sets){
-  const completedSets=sets
-    .filter(s=>s.done && s.weight!=="" && s.weight!==null && !Number.isNaN(Number(s.weight)))
-    .map(s=>({weight:Number(s.weight), reps:Number(s.reps)||0}));
-  if(!completedSets.length) return;
-  let h=getHistory(exIndex);
-  h.unshift({sets:completedSets, date:new Date().toISOString()});
-  h=h.slice(0,20);
-  localStorage.setItem(histKey(exIndex),JSON.stringify(h));
-}
-function lastThree(exIndex){
-  return getHistory(exIndex).slice(0,3);
-}
-
-
-function showPage(page){
-  currentPage=page;
-  const workout=document.getElementById("workoutPanel");
-  const history=document.getElementById("historyPanel");
-  const footer=document.getElementById("footerBar");
-  const wb=document.getElementById("workoutPageBtn");
-  const hb=document.getElementById("historyPageBtn");
-  if(page==="history"){
-    workout.style.display="none";
-    history.style.display="block";
-    footer.style.display="none";
-    wb.classList.remove("active"); hb.classList.add("active");
-    document.getElementById("historyDay").value=currentDay;
-    document.getElementById("historyMode").value=mode;
-    populateHistoryExercises();
-    renderHistory();
-  } else {
-    workout.style.display="block";
-    history.style.display="none";
-    footer.style.display="block";
-    hb.classList.remove("active"); wb.classList.add("active");
-  }
-}
-
-function populateHistoryExercises(){
-  const day=document.getElementById("historyDay").value;
-  const hm=document.getElementById("historyMode").value;
-  const sel=document.getElementById("historyExercise");
-  const old=sel.value;
-  sel.innerHTML="";
-  workouts[day].exercises.forEach((ex,i)=>{
-    const opt=document.createElement("option");
-    opt.value=i;
-    opt.textContent=hm==="gym"?ex.gym:ex.home;
-    sel.appendChild(opt);
-  });
-  if([...sel.options].some(o=>o.value===old)) sel.value=old;
-}
-
-function historyFor(day,hm,exIndex){
-  return JSON.parse(localStorage.getItem(`history_${day}_${hm}_${exIndex}`) || '[]');
-}
-
-function avgSetWeight(session){
-  if(session.sets && session.sets.length){
-    const vals=session.sets.map(s=>Number(s.weight)).filter(Number.isFinite);
-    return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
-  }
-  if(session.weight!==undefined && Number.isFinite(Number(session.weight))) return Number(session.weight);
-  return null;
-}
-
-function formatDate(iso){
-  const d=new Date(iso);
-  if(Number.isNaN(d.getTime())) return "Previous session";
-  return d.toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});
-}
-
-function drawProgressChart(points){
-  const canvas=document.getElementById("progressChart");
-  const rect=canvas.getBoundingClientRect();
-  const ratio=window.devicePixelRatio||1;
-  canvas.width=Math.max(300,Math.floor(rect.width*ratio));
-  canvas.height=Math.floor(250*ratio);
-  const ctx=canvas.getContext("2d");
-  ctx.scale(ratio,ratio);
-  const w=rect.width,h=250;
-  ctx.clearRect(0,0,w,h);
-
-  const pad={l:44,r:16,t:18,b:34};
-  const pw=w-pad.l-pad.r, ph=h-pad.t-pad.b;
-
-  ctx.strokeStyle="#30363d"; ctx.lineWidth=1;
-  for(let i=0;i<5;i++){
-    const y=pad.t+(ph*i/4);
-    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(w-pad.r,y);ctx.stroke();
-  }
-
-  if(!points.length){
-    ctx.fillStyle="#8b949e";ctx.font="14px system-ui";
-    ctx.textAlign="center";ctx.fillText("No saved workouts yet",w/2,h/2);
-    return;
-  }
-
-  const vals=points.map(p=>p.value);
-  let min=Math.min(...vals),max=Math.max(...vals);
-  if(min===max){min=Math.max(0,min-5);max=max+5;}
-  else {const span=max-min;min=Math.max(0,min-span*.15);max=max+span*.15;}
-
-  ctx.fillStyle="#8b949e"; ctx.font="11px system-ui"; ctx.textAlign="right";
-  for(let i=0;i<5;i++){
-    const value=max-(max-min)*(i/4);
-    const y=pad.t+(ph*i/4)+4;
-    ctx.fillText(value.toFixed(value%1?1:0)+"kg",pad.l-7,y);
-  }
-
-  const xFor=i=>points.length===1?pad.l+pw/2:pad.l+(pw*i/(points.length-1));
-  const yFor=v=>pad.t+ph-((v-min)/(max-min))*ph;
-
-  ctx.strokeStyle="#58a6ff";ctx.lineWidth=3;ctx.lineJoin="round";ctx.lineCap="round";
-  ctx.beginPath();
-  points.forEach((p,i)=>{
-    const x=xFor(i),y=yFor(p.value);
-    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
-  });
-  ctx.stroke();
-
-  points.forEach((p,i)=>{
-    const x=xFor(i),y=yFor(p.value);
-    ctx.fillStyle="#58a6ff";
-    ctx.beginPath();ctx.arc(x,y,4,0,Math.PI*2);ctx.fill();
-  });
-
-  ctx.fillStyle="#8b949e";ctx.font="10px system-ui";ctx.textAlign="center";
-  const labelIndexes=points.length<=5 ? points.map((_,i)=>i) : [0,Math.floor((points.length-1)/2),points.length-1];
-  labelIndexes.forEach(i=>{
-    ctx.fillText(points[i].label,xFor(i),h-12);
-  });
-}
-
-function renderHistory(){
-  const day=document.getElementById("historyDay").value;
-  const hm=document.getElementById("historyMode").value;
-  const exIndex=Number(document.getElementById("historyExercise").value||0);
-  const ex=workouts[day].exercises[exIndex];
-  if(!ex) return;
-  const name=hm==="gym"?ex.gym:ex.home;
-  const history=historyFor(day,hm,exIndex);
-
-  document.getElementById("chartTitle").textContent=name+" progress";
-  const chronological=[...history].reverse();
-  const points=chronological.map(s=>({value:avgSetWeight(s),label:formatDate(s.date).replace(/ \d{4}$/,"")})).filter(p=>p.value!==null);
-
-  const latest=history.length?avgSetWeight(history[0]):null;
-  const best=points.length?Math.max(...points.map(p=>p.value)):null;
-  document.getElementById("latestMetric").textContent=latest!==null?`${latest.toFixed(latest%1?1:0)} kg`:"—";
-  document.getElementById("bestMetric").textContent=best!==null?`${best.toFixed(best%1?1:0)} kg`:"—";
-  document.getElementById("sessionsMetric").textContent=history.length;
-
-  drawProgressChart(points);
-
-  const list=document.getElementById("historyList");
-  if(!history.length){
-    list.innerHTML='<div class="note">No history recorded yet. Complete and finish a workout to save it here.</div>';
-    return;
-  }
-  list.innerHTML=history.map((s,idx)=>{
-    let detail="";
-    if(s.sets && s.sets.length){
-      detail=s.sets.map((set,si)=>`Set ${si+1}: ${set.weight}kg × ${set.reps}`).join(" &nbsp;•&nbsp; ");
-    } else {
-      detail=`Working weight: ${s.weight} kg`;
-    }
-    const avg=avgSetWeight(s);
-    return `<div class="histSession">
-      <div class="histDate">${formatDate(s.date)}${idx===0?' <span style="color:var(--good);font-size:11px">LATEST</span>':''}</div>
-      <div class="histSets">${detail}</div>
-      ${avg!==null?`<div class="note">Average set weight: ${avg.toFixed(avg%1?1:0)} kg</div>`:""}
-    </div>`;
-  }).join("");
-}
-
-window.addEventListener("resize",()=>{ if(currentPage==="history") renderHistory(); });
-
-function renderTabs(){
-  const t=document.getElementById("tabs"); t.innerHTML="";
-  [["push","Day 1 Push"],["pull","Day 2 Pull"],["full","Day 3 Full Body"]].forEach(([id,label])=>{
-    let b=document.createElement("button");
-    b.className="tab"+(currentDay===id?" active":"");
-    b.textContent=label;
-    b.onclick=()=>{currentDay=id;localStorage.setItem("currentDay",id);render();};
-    t.appendChild(b);
-  });
-}
-function render(){
-  renderTabs();
-  document.getElementById("modeSelect").value=mode;
-  document.getElementById("dayTitle").textContent=workouts[currentDay].title;
-  const list=document.getElementById("exerciseList"); list.innerHTML="";
-  workouts[currentDay].exercises.forEach((ex,i)=>{
-    let d=getData(i);
-    let name=mode==="gym"?ex.gym:ex.home;
-    let target=ex.range||"10";
-    let div=document.createElement("div"); div.className="exercise";
-    div.innerHTML=`
-      <div class="exHead">
-        <div>
-          <div class="exName">${i+1}. ${name}</div>
-          ${mode==="home" && ex.gym!==ex.home ? `<div class="alt">Gym equivalent: ${ex.gym}</div>`:""}
-        </div>
-        <button class="flag ${d.flag?"on":""}" onclick="toggleFlag(${i})">${d.flag?"↑ Increase next time":"Flag ↑ weight"}</button>
-      </div>
-      <div class="weightRow">
-        <span class="note">Target: 4 × ${target}</span>
-      </div>
-      <div class="note" style="margin-top:-2px;margin-bottom:10px;line-height:1.6;">
-        <strong style="color:var(--text)">Last 3 sessions:</strong><br>
-        ${lastThree(i).length ? lastThree(i).map((h,idx)=>{
-          if(h.sets) return `${idx+1}. `+h.sets.map((s,si)=>`S${si+1}: ${s.weight}kg × ${s.reps}`).join(" • ");
-          return `${idx+1}. ${h.weight} kg`;
-        }).join("<br>") : "No previous sessions yet"}
-      </div>
-      <div class="sets">
-        ${d.sets.map((s,si)=>`
-          <div class="set ${s.done?"done":""}">
-            <div class="setNum">SET ${si+1}</div>
-            <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">WEIGHT (kg)</div>
-            <input class="repInput" type="number" step="0.5" value="${s.weight}" placeholder="kg" onchange="setSetWeight(${i},${si},this.value)">
-            <div style="font-size:10px;color:var(--muted);margin:7px 0 3px;">REPS</div>
-            <input class="repInput" type="number" value="${s.reps}" onchange="setReps(${i},${si},this.value)">
-            <button class="completeSet" onclick="completeSet(${i},${si})">${s.done?"✓ Done":"Complete"}</button>
-          </div>`).join("")}
-      </div>
-      ${mode==="home" && ex.home.includes("Goblet Squats") ? `<div class="note">One round = 10 goblet squats immediately followed by 15 kettlebell swings.</div>`:""}
-    `;
-    list.appendChild(div);
-  });
-}
-function changeMode(){
-  mode=document.getElementById("modeSelect").value;
-  localStorage.setItem("mode",mode); render();
-}
-function setSetWeight(i,s,v){
-  let d=getData(i);
-  d.sets[s].weight=v;
-  // Convenience: if later sets are blank, copy the new weight forward.
-  for(let x=s+1;x<d.sets.length;x++){
-    if(d.sets[x].weight==="") d.sets[x].weight=v;
-  }
-  saveData(i,d);
-}
-function setReps(i,s,v){let d=getData(i);d.sets[s].reps=Number(v);saveData(i,d);}
-function toggleFlag(i){let d=getData(i);d.flag=!d.flag;saveData(i,d);render();}
-function completeSet(i,s){
-  let d=getData(i); d.sets[s].done=!d.sets[s].done; saveData(i,d); render();
-  if(d.sets[s].done) startRest();
-}
-function setRest(n){restSeconds=n;updateRest();}
-function startRest(){
-  clearInterval(restInt); restSeconds=90; updateRest();
-  restInt=setInterval(()=>{restSeconds--;updateRest();if(restSeconds<=0){clearInterval(restInt);navigator.vibrate?.([150,80,150]);}},1000);
-}
-function updateRest(){
-  let m=Math.floor(restSeconds/60),s=restSeconds%60;
-  document.getElementById("restTime").textContent=`${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-}
-function toggleWorkout(){
-  workoutRunning=!workoutRunning;
-  document.getElementById("startBtn").textContent=workoutRunning?"Pause Workout":"Start Workout";
-  if(workoutRunning){
-    workoutInt=setInterval(()=>{workoutSeconds++;updateWorkout();},1000);
-  }else clearInterval(workoutInt);
-}
-function updateWorkout(){
-  let m=Math.floor(workoutSeconds/60),s=workoutSeconds%60;
-  document.getElementById("workoutTime").textContent=`${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-}
-function resetWorkoutTimer(){clearInterval(workoutInt);workoutSeconds=0;workoutRunning=false;updateWorkout();document.getElementById("startBtn").textContent="Start Workout";}
-function clearDay(){
-  if(!confirm("Clear today's set completion and reps? Weights and increase flags will stay.")) return;
-  workouts[currentDay].exercises.forEach((_,i)=>{
-    let d=getData(i); d.sets=d.sets.map(s=>({weight:s.weight,reps:10,done:false})); saveData(i,d);
-  }); render();
-}
-function finishWorkout(){
-  clearInterval(workoutInt); workoutRunning=false;
-  let complete=0,total=0,flags=0;
-  workouts[currentDay].exercises.forEach((_,i)=>{
-    let d=getData(i);
-    let anyDone=false;
-    d.sets.forEach(s=>{total++;if(s.done){complete++;anyDone=true;}});
-    if(d.flag)flags++;
-    if(anyDone) addHistory(i,d.sets);
-  });
-  let sum=document.getElementById("summary");
-  sum.style.display="block";
-  sum.innerHTML=`<strong>Workout complete</strong><br>${complete}/${total} sets completed • ${flags} exercise${flags===1?"":"s"} flagged to increase next time • Time ${document.getElementById("workoutTime").textContent}<br><span class="note">Completed set weights and reps from this session have been added to each exercise's history.</span>`;
-  render();
-  sum.scrollIntoView({behavior:"smooth"});
-  document.getElementById("startBtn").textContent="Start Workout";
-}
-
-function exportBackup(){
-  const data={};
-  for(let i=0;i<localStorage.length;i++){
-    const k=localStorage.key(i);
-    data[k]=localStorage.getItem(k);
-  }
-  const payload={
-    app:"3-Day Strength Tracker",
-    version:1,
-    exportedAt:new Date().toISOString(),
-    localStorage:data
-  };
-  const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  const d=new Date();
-  a.href=url;
-  a.download=`strength-tracker-backup-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function restoreBackup(event){
-  const file=event.target.files && event.target.files[0];
-  if(!file) return;
-  const reader=new FileReader();
-  reader.onload=()=>{
-    try{
-      const payload=JSON.parse(reader.result);
-      if(!payload || !payload.localStorage) throw new Error("Invalid backup");
-      if(!confirm("Restore this backup? Current app data on this device will be replaced.")) return;
-      localStorage.clear();
-      Object.entries(payload.localStorage).forEach(([k,v])=>localStorage.setItem(k,v));
-      alert("Backup restored successfully.");
-      location.reload();
-    }catch(e){
-      alert("Could not restore this backup file.");
-    }
-  };
-  reader.readAsText(file);
-  event.target.value="";
-}
-
-if("serviceWorker" in navigator){
-  window.addEventListener("load",()=>{
-    navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
-  });
-}
-
-render(); updateWorkout(); updateRest(); populateHistoryExercises();
+const workouts={
+push:{title:"Day 1 – Push / Quads",exercises:[
+{gym:"Incline DB Bench Press",home:"Incline DB Bench Press",shared:true},{gym:"Goblet Squat",home:"Goblet Squat",shared:true},{gym:"Seated DB Shoulder Press",home:"Seated DB Shoulder Press",shared:true},{gym:"Tricep Pulldown",home:"DB Skull Crushers"},{gym:"Assisted Dip Machine",home:"DB Fly"}]},
+pull:{title:"Day 2 – Pull / Posterior",exercises:[
+{gym:"Lat Pulldown",home:"DB / KB Pullover"},{gym:"Seated Cable Row",home:"1-Arm DB / KB Row"},{gym:"Standing DB Bicep Curl",home:"Standing DB Bicep Curl",shared:true},{gym:"Lying Leg Curl",home:"DB Romanian Deadlift"},{gym:"Assisted Pull-Ups",home:"Kettlebell High Pull"}]},
+full:{title:"Day 3 – Full Body",exercises:[
+{gym:"Flat DB Bench Press",home:"Flat DB Bench Press",shared:true},{gym:"Leg Press",home:"DB Lunges"},{gym:"Chest-Supported DB Row",home:"Chest-Supported DB Row",shared:true},{gym:"DB Lateral Raise",home:"DB Lateral Raise",shared:true,range:"10–15"},{gym:"Overhead DB Tricep Extension",home:"Overhead DB Tricep Extension",shared:true,range:"10–12"}]}}
+let currentDay=localStorage.getItem("currentDay")||"push",mode=localStorage.getItem("mode")||"gym",currentPage="workout";
+let workoutRunning=false,workoutSeconds=0,workoutInt=null,restSeconds=90,restInt=null;
+function stem(day,md,i){return workouts[day].exercises[i].shared?`${day}_shared_${i}`:`${day}_${md}_${i}`}
+function key(i){return `tracker_${stem(currentDay,mode,i)}`} function histKey(i){return `history_${stem(currentDay,mode,i)}`}
+function getData(i){let d=JSON.parse(localStorage.getItem(key(i))||'{"sets":[{"reps":10,"done":false},{"reps":10,"done":false},{"reps":10,"done":false},{"reps":10,"done":false}]}');while(d.sets.length<4)d.sets.push({reps:10,done:false});d.sets=d.sets.slice(0,4).map(s=>({reps:s.reps??10,weight:s.weight??d.weight??"",done:!!s.done}));return d}
+function saveData(i,d){localStorage.setItem(key(i),JSON.stringify(d))} function getHistory(i){return JSON.parse(localStorage.getItem(histKey(i))||'[]')}
+function addHistory(i,sets){let cs=sets.filter(s=>s.done&&s.weight!=="").map(s=>({weight:Number(s.weight),reps:Number(s.reps)||0}));if(!cs.length)return;let x=getHistory(i);x.unshift({sets:cs,date:new Date().toISOString()});localStorage.setItem(histKey(i),JSON.stringify(x.slice(0,500)))}
+function recentSets(i){let out=[];for(const session of getHistory(i)){if(session.sets){for(let j=session.sets.length-1;j>=0;j--){let s=session.sets[j];if(s.weight!=="")out.push({weight:Number(s.weight),reps:Number(s.reps)||0});if(out.length>=5)return out}}else if(session.weight!==undefined){out.push({weight:Number(session.weight),reps:10});if(out.length>=5)return out}}return out}
+function ready(i){let r=recentSets(i);return r.length>=3&&r[0].reps===10&&r[1].reps===10&&r[2].reps===10&&r[0].weight===r[1].weight&&r[1].weight===r[2].weight}
+function merge(a,b){let all=[...(a||[]),...(b||[])].sort((x,y)=>new Date(y.date||0)-new Date(x.date||0)),seen=new Set();return all.filter(s=>{let q=JSON.stringify([s.date,s.sets,s.weight]);if(seen.has(q))return false;seen.add(q);return true})}
+function migrate(){if(localStorage.getItem('strengthTrackerV2Migration')==='done')return;[['push',0],['push',1],['push',2],['pull',2],['full',0],['full',2],['full',3],['full',4]].forEach(([d,i])=>{let nh=`history_${d}_shared_${i}`,nt=`tracker_${d}_shared_${i}`,a=JSON.parse(localStorage.getItem(`history_${d}_gym_${i}`)||'[]'),b=JSON.parse(localStorage.getItem(`history_${d}_home_${i}`)||'[]');localStorage.setItem(nh,JSON.stringify(merge(a,b)));let tg=localStorage.getItem(`tracker_${d}_gym_${i}`),th=localStorage.getItem(`tracker_${d}_home_${i}`);if(!localStorage.getItem(nt)&&(tg||th))localStorage.setItem(nt,tg||th)});localStorage.setItem('strengthTrackerV2Migration','done')}
+migrate();
+function showPage(page){currentPage=page;let w=document.getElementById('workoutPanel'),h=document.getElementById('historyPanel'),f=document.getElementById('footerBar'),wb=document.getElementById('workoutPageBtn'),hb=document.getElementById('historyPageBtn');if(page==='history'){w.style.display='none';h.style.display='block';f.style.display='none';wb.classList.remove('active');hb.classList.add('active');document.getElementById('historyDay').value=currentDay;document.getElementById('historyMode').value=mode;populateHistoryExercises();renderHistory()}else{w.style.display='block';h.style.display='none';f.style.display='block';hb.classList.remove('active');wb.classList.add('active')}}
+function populateHistoryExercises(){let d=document.getElementById('historyDay').value,m=document.getElementById('historyMode').value,s=document.getElementById('historyExercise'),old=s.value;s.innerHTML='';workouts[d].exercises.forEach((e,i)=>{let o=document.createElement('option');o.value=i;o.textContent=m==='gym'?e.gym:e.home;s.appendChild(o)});if([...s.options].some(o=>o.value===old))s.value=old}
+function historyFor(d,m,i){return JSON.parse(localStorage.getItem(`history_${stem(d,m,i)}`)||'[]')}
+function volume(s){if(s.sets)return s.sets.reduce((a,x)=>a+(Number(x.weight)||0)*(Number(x.reps)||0),0);return (Number(s.weight)||0)*40}
+function formatDate(x){let d=new Date(x);return Number.isNaN(d.getTime())?'Previous session':d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}
+function drawProgressChart(points){let c=document.getElementById('progressChart'),r=c.getBoundingClientRect(),q=window.devicePixelRatio||1;c.width=Math.max(300,Math.floor(r.width*q));c.height=250*q;let x=c.getContext('2d');x.scale(q,q);let w=r.width,h=250,p={l:52,r:16,t:18,b:34},pw=w-p.l-p.r,ph=h-p.t-p.b;x.clearRect(0,0,w,h);x.strokeStyle='#30363d';for(let i=0;i<5;i++){let y=p.t+ph*i/4;x.beginPath();x.moveTo(p.l,y);x.lineTo(w-p.r,y);x.stroke()}if(!points.length){x.fillStyle='#8b949e';x.font='14px system-ui';x.textAlign='center';x.fillText('No saved workouts yet',w/2,h/2);return}let vals=points.map(z=>z.value),mn=Math.min(...vals),mx=Math.max(...vals);if(mn===mx){mn=Math.max(0,mn-100);mx+=100}else{let sp=mx-mn;mn=Math.max(0,mn-sp*.15);mx+=sp*.15}x.fillStyle='#8b949e';x.font='11px system-ui';x.textAlign='right';for(let i=0;i<5;i++){let v=mx-(mx-mn)*i/4,y=p.t+ph*i/4+4;x.fillText(Math.round(v)+'kg',p.l-7,y)}let xf=i=>points.length===1?p.l+pw/2:p.l+pw*i/(points.length-1),yf=v=>p.t+ph-(v-mn)/(mx-mn)*ph;x.strokeStyle='#58a6ff';x.lineWidth=3;x.beginPath();points.forEach((z,i)=>i?x.lineTo(xf(i),yf(z.value)):x.moveTo(xf(i),yf(z.value)));x.stroke();points.forEach((z,i)=>{x.fillStyle='#58a6ff';x.beginPath();x.arc(xf(i),yf(z.value),4,0,Math.PI*2);x.fill()});x.fillStyle='#8b949e';x.font='10px system-ui';x.textAlign='center';let ids=points.length<=5?points.map((_,i)=>i):[0,Math.floor((points.length-1)/2),points.length-1];ids.forEach(i=>x.fillText(points[i].label,xf(i),h-12))}
+function renderHistory(){let d=document.getElementById('historyDay').value,m=document.getElementById('historyMode').value,i=Number(document.getElementById('historyExercise').value||0),e=workouts[d].exercises[i];if(!e)return;let name=m==='gym'?e.gym:e.home,H=historyFor(d,m,i),pts=[...H].reverse().map(s=>({value:volume(s),label:formatDate(s.date).replace(/ \d{4}$/,'')}));document.getElementById('chartTitle').textContent=name+' progress';document.getElementById('latestMetric').textContent=H.length?Math.round(volume(H[0]))+' kg':'—';document.getElementById('bestMetric').textContent=pts.length?Math.round(Math.max(...pts.map(p=>p.value)))+' kg':'—';document.getElementById('sessionsMetric').textContent=H.length;drawProgressChart(pts);let l=document.getElementById('historyList');l.innerHTML=H.length?H.map((s,k)=>`<div class="histSession"><div class="histDate">${formatDate(s.date)}${k===0?' <span style="color:var(--good);font-size:11px">LATEST</span>':''}</div><div class="histSets">${s.sets?s.sets.map((z,j)=>`Set ${j+1}: ${z.weight}kg × ${z.reps}`).join(' &nbsp;•&nbsp; '):`Working weight: ${s.weight}kg`}</div><div class="note">Total session volume: ${Math.round(volume(s))} kg</div></div>`).join(''):'<div class="note">No history recorded yet.</div>'}
+window.addEventListener('resize',()=>{if(currentPage==='history')renderHistory()});
+function renderTabs(){let t=document.getElementById('tabs');t.innerHTML='';[['push','Day 1 Push'],['pull','Day 2 Pull'],['full','Day 3 Full Body']].forEach(([id,l])=>{let b=document.createElement('button');b.className='tab'+(currentDay===id?' active':'');b.textContent=l;b.onclick=()=>{currentDay=id;localStorage.setItem('currentDay',id);render()};t.appendChild(b)})}
+function render(){renderTabs();document.getElementById('modeSelect').value=mode;document.getElementById('dayTitle').textContent=workouts[currentDay].title;let list=document.getElementById('exerciseList');list.innerHTML='';workouts[currentDay].exercises.forEach((e,i)=>{let d=getData(i),name=mode==='gym'?e.gym:e.home,target=e.range||'10',r=recentSets(i),v=document.createElement('div');v.className='exercise';v.innerHTML=`<div class="exHead"><div><div class="exName">${i+1}. ${name}</div>${mode==='home'&&e.gym!==e.home?`<div class="alt">Gym equivalent: ${e.gym}</div>`:''}</div></div><div class="weightRow"><span class="note">Target: 4 × ${target}</span></div><div class="note" style="margin-top:-2px;margin-bottom:10px;line-height:1.65"><strong style="color:var(--text)">Last 5 completed sets:</strong><br>${r.length?r.map((s,j)=>`${j+1}. ${s.weight}kg × ${s.reps}`).join(' &nbsp;•&nbsp; '):'No previous sets yet'}${ready(i)?'<div style="margin-top:7px;color:var(--good);font-weight:800;font-size:14px">↑ READY TO INCREASE</div>':''}</div><div class="sets">${d.sets.map((s,j)=>`<div class="set ${s.done?'done':''}"><div class="setNum">SET ${j+1}</div><div style="font-size:10px;color:var(--muted);margin-bottom:3px">WEIGHT (kg)</div><input class="repInput" type="number" step="0.5" value="${s.weight}" placeholder="kg" onchange="setSetWeight(${i},${j},this.value)"><div style="font-size:10px;color:var(--muted);margin:7px 0 3px">REPS</div><input class="repInput" type="number" value="${s.reps}" onchange="setReps(${i},${j},this.value)"><button class="completeSet" onclick="completeSet(${i},${j})">${s.done?'✓ Done':'Complete'}</button></div>`).join('')}</div>`;list.appendChild(v)})}
+function changeMode(){mode=document.getElementById('modeSelect').value;localStorage.setItem('mode',mode);render()}
+function setSetWeight(i,s,v){let d=getData(i);d.sets[s].weight=v;for(let x=s+1;x<4;x++)if(d.sets[x].weight==='')d.sets[x].weight=v;saveData(i,d)} function setReps(i,s,v){let d=getData(i);d.sets[s].reps=Number(v);saveData(i,d)}
+function completeSet(i,s){let d=getData(i);d.sets[s].done=!d.sets[s].done;saveData(i,d);render();if(d.sets[s].done)startRest()}
+function setRest(n){restSeconds=n;updateRest()} function startRest(){clearInterval(restInt);restSeconds=90;updateRest();restInt=setInterval(()=>{restSeconds--;updateRest();if(restSeconds<=0){clearInterval(restInt);navigator.vibrate?.([150,80,150])}},1000)} function updateRest(){let m=Math.floor(restSeconds/60),s=restSeconds%60;document.getElementById('restTime').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
+function toggleWorkout(){workoutRunning=!workoutRunning;document.getElementById('startBtn').textContent=workoutRunning?'Pause Workout':'Start Workout';if(workoutRunning)workoutInt=setInterval(()=>{workoutSeconds++;updateWorkout()},1000);else clearInterval(workoutInt)} function updateWorkout(){let m=Math.floor(workoutSeconds/60),s=workoutSeconds%60;document.getElementById('workoutTime').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`} function resetWorkoutTimer(){clearInterval(workoutInt);workoutSeconds=0;workoutRunning=false;updateWorkout();document.getElementById('startBtn').textContent='Start Workout'}
+function clearDay(){if(!confirm("Clear today's set completion and reps? Weights will stay."))return;workouts[currentDay].exercises.forEach((_,i)=>{let d=getData(i);d.sets=d.sets.map(s=>({weight:s.weight,reps:10,done:false}));saveData(i,d)});render()}
+function finishWorkout(){clearInterval(workoutInt);workoutRunning=false;let complete=0,total=0;workouts[currentDay].exercises.forEach((_,i)=>{let d=getData(i),any=false;d.sets.forEach(s=>{total++;if(s.done){complete++;any=true}});if(any)addHistory(i,d.sets);d.sets=d.sets.map(s=>({weight:s.weight,reps:10,done:false}));saveData(i,d)});let elapsed=document.getElementById('workoutTime').textContent;resetWorkoutTimer();clearInterval(restInt);restSeconds=90;updateRest();render();let s=document.getElementById('summary');s.style.display='block';s.innerHTML=`<strong>Workout saved</strong><br>${complete}/${total} sets completed • Time ${elapsed}<br><span class="note">The day has been cleared for next time. Weights and history are kept.</span>`;s.scrollIntoView({behavior:'smooth'})}
+function exportBackup(){let data={};for(let i=0;i<localStorage.length;i++){let k=localStorage.key(i);data[k]=localStorage.getItem(k)}let blob=new Blob([JSON.stringify({app:'3-Day Strength Tracker',version:2,exportedAt:new Date().toISOString(),localStorage:data},null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a'),d=new Date();a.href=u;a.download=`strength-tracker-backup-${d.toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u)}
+function restoreBackup(ev){let f=ev.target.files?.[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let p=JSON.parse(r.result);if(!p.localStorage)throw 0;if(!confirm('Restore this backup? Current app data will be replaced.'))return;localStorage.clear();Object.entries(p.localStorage).forEach(([k,v])=>localStorage.setItem(k,v));alert('Backup restored.');location.reload()}catch(e){alert('Could not restore this backup file.')}};r.readAsText(f);ev.target.value=''}
+if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').then(r=>r.update()).catch(()=>{}));
+render();updateWorkout();updateRest();populateHistoryExercises();
 </script>
 </body>
 </html>
