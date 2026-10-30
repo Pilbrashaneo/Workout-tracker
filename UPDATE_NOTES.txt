@@ -1,0 +1,11 @@
+Strength Tracker v3.5
+- Gym Day 2: T-Bar Row and Pec Deck.
+- Finish Workout requires confirmation before saving/resetting.
+- Weights and reps autosave while typing; completed ticks persist.
+- Previous Chest-Supported DB Row history remains accessible as an archived exercise.
+- No change to existing storage key or three-day schedule.
+
+IMPORTANT: Use Backup in your current app before updating.
+Deploy to the SAME GitHub Pages repository/URL.
+Do not uninstall the installed app or clear website data.
+The T-Bar Row starts a fresh progression history.
